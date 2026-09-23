@@ -1,15 +1,33 @@
-# Служебные файлы Python
+# ---- Python ----
 __pycache__/
 *.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
 
-# macOS
+# ---- Результаты прогонов ----
+# Отчёт и результаты запуска сниппетов пересобираются скриптами.
+REPORT.md
+data/snippet_results.json
+
+# ВАЖНО: data/blind_key.json НЕ игнорируется намеренно — см. README.
+
+# ---- Окружение ----
+.env
+.env.*
+!.env.example
+
+# ---- macOS / редакторы ----
 .DS_Store
-
-# Временные каталоги (в том числе те, что создают скрипты при запуске кода)
-tmp/
-tmp-*/
-.tmp/
-*.tmp
-
-# ВАЖНО: data/blind_key.json намеренно НЕ игнорируется — он часть данных проекта.
-# Просто не открывайте его до конца разметки.
+._*
+.idea/
+.vscode/
+.claude/

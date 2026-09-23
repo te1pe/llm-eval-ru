@@ -1,116 +1,124 @@
-# llm-eval-ru — ручная попарная разметка ответов LLM
+# llm-eval-ru — manual pairwise annotation of LLM answers
 
-Учебный проект: я вручную сравниваю ответы двух русскоязычных моделей (Алиса и
-GigaChat) на одни и те же вопросы, ставлю баллы по критериям, выбираю лучший
-ответ, обосновываю выбор ссылками на первоисточники и пишу эталонный ответ.
+A study project: I manually compare the answers of two Russian-language models
+(Alice and GigaChat) to the same questions, score them against a set of
+criteria, pick the better answer, justify the choice with links to primary
+sources, and write a reference answer.
 
-## Зачем это
+## Why
 
-Попарное сравнение ответов — базовая процедура обучения моделей с обратной связью
-от человека (RLHF): разметчик выбирает лучший из двух ответов, на этих
-предпочтениях учится reward-модель, и уже она направляет дообучение. Схема
-описана в статье «Training Language Models to Follow Instructions with Human
-Feedback» — [arXiv:2203.02155](https://arxiv.org/abs/2203.02155).
+Pairwise comparison of answers is the basic procedure in reinforcement learning
+from human feedback: an annotator picks the better of two answers, a reward
+model learns from those preferences, and that model then guides fine-tuning.
+The scheme is described in "Training Language Models to Follow Instructions
+with Human Feedback" — [arXiv:2203.02155](https://arxiv.org/abs/2203.02155).
 
-Здесь воспроизведён именно человеческий этап этого процесса — и к нему добавлено
-то, чего в исходной схеме нет: обязательная проверка каждого утверждения по
-первоисточнику, запуск кода из ответов и эталонный ответ к каждому заданию.
+What is reproduced here is exactly the human stage of that process — plus
+things the original scheme does not have: a mandatory check of every claim
+against a primary source, execution of the code from the answers, and a
+reference answer for every task.
 
-Ценность проекта — в разметке и в обоснованиях. Скрипты нужны только чтобы
-разметка была воспроизводимой, слепой и проверяемой.
+The value of the project is in the annotation and the justifications. The
+scripts exist only to make the annotation reproducible, blind and verifiable.
 
-**API моделей не используется:** ответы копируются из веб-чатов вручную.
+**No model APIs are used:** answers are copied from the web chats by hand.
 
-## Как устроена работа
+## How the work is organised
 
-### 1. Создать заготовку задания
+### 1. Create a task stub
 
 ```bash
 python3 scripts/new_task.py ios false_premise
 ```
 
-Скрипт создаёт `data/raw/ios-001.md` со следующим свободным номером и заполненной
-шапкой и печатает путь. Вопрос беру из [data/questions_bank.md](data/questions_bank.md).
+The script creates `data/raw/ios-001.md` with the next free number and a filled
+header, and prints the path. I take the question from
+[data/questions_bank.md](data/questions_bank.md).
 
-### 2. Заполнить файл вручную
+### 2. Fill the file in by hand
 
-Задаю один и тот же вопрос обеим моделям в их веб-чатах и вставляю ответы в
-секции «## Алиса» и «## GigaChat» как есть, вместе с блоками кода. Формат —
-[data/raw/_TEMPLATE.md](data/raw/_TEMPLATE.md).
+I ask both models the same question in their web chats and paste the answers
+into the "## Алиса" and "## GigaChat" sections as they are, code blocks
+included. The format is [data/raw/_TEMPLATE.md](data/raw/_TEMPLATE.md).
 
-### 3. Собрать задания в датасет
+### 3. Collect the tasks into a dataset
 
 ```bash
 python3 scripts/ingest.py
 ```
 
-Для каждого нового id случайно (модуль `secrets`) выбирается, чей ответ станет
-стороной **A**, а чей — **B**. Запись дописывается в `data/evals.jsonl`,
-соответствие «сторона → модель» — в `data/blind_key.json`. Уже внесённые id
-скрипт не трогает, поэтому запускать его можно сколько угодно раз.
+For every new id, which answer becomes side **A** and which becomes **B** is
+chosen at random (the `secrets` module). The record is appended to
+`data/evals.jsonl`, and the "side → model" mapping to `data/blind_key.json`.
+The script does not touch ids that are already in, so it can be run any number
+of times.
 
-> ⚠️ **Не открывайте `data/blind_key.json` до конца разметки.** Он лежит в
-> репозитории (в `.gitignore` его намеренно нет), но знание того, где чей ответ,
-> делает разметку небеспристрастной. Разблиндировка — последний шаг.
+> ⚠️ **Do not open `data/blind_key.json` before the annotation is finished.**
+> It is kept in the repository (it is deliberately absent from `.gitignore`),
+> but knowing whose answer is whose makes the annotation partial. Unblinding is
+> the last step.
 
-### 4. Разметить
+### 4. Annotate
 
-Открываю `data/evals.jsonl` и заполняю поля руками по правилам из
-[GUIDELINES.md](GUIDELINES.md): баллы, вердикт, обоснование, источники, эталон.
-Затем меняю `status` на `"done"`.
+I open `data/evals.jsonl` and fill the fields in by hand following the rules in
+[GUIDELINES.md](GUIDELINES.md): scores, verdict, justification, sources,
+reference answer. Then I change `status` to `"done"`.
 
-### 5. Проверить формат
+### 5. Validate the format
 
 ```bash
 python3 scripts/validate.py
 ```
 
-Для `todo` проверяется только структура. Для `done` — что все баллы целые 1–5,
-вердикт из {A, B, tie}, обоснование и эталон не пустые, а в источниках есть хотя
-бы одна ссылка. Дубли id и неизвестные `domain`/`task_type` тоже ловятся. При
-проблемах — код выхода 1 и список с указанием id.
+For `todo` only the structure is checked. For `done` — that every score is an
+integer 1–5, the verdict is one of {A, B, tie}, the justification and the
+reference answer are non-empty, and there is at least one link in the sources.
+Duplicate ids and unknown `domain`/`task_type` values are caught too. On
+problems: exit code 1 and a list naming the ids.
 
-### 6. Прогнать код из ответов
-
-```bash
-python3 scripts/run_snippets.py          # dry-run: только покажет, что будет запущено
-python3 scripts/run_snippets.py --run    # реальный запуск
-```
-
-> ⚠️ **Код из ответов LLM никто не проверял.** Он может удалять файлы, обращаться
-> в сеть и делать что угодно ещё. Запускайте только осознанно и лучше в
-> изолированном окружении. Без `--run` не выполняется ничего.
-
-Каждый блок выполняется во временном каталоге с таймаутом 10 секунд:
-`python → python3`, `swift → swift`, `c → clang` и запуск бинарника,
-`java → java <File>.java`. Если инструмента нет в PATH, код содержит
-`import SwiftUI` / `import UIKit` или язык не распознан — статус `skipped` с
-причиной. Статусы: `ok`, `compile_error`, `runtime_error`, `timeout`, `skipped`.
-Результат — `data/snippet_results.json`.
-
-### 7. Собрать отчёт
+### 6. Run the code from the answers
 
 ```bash
-python3 scripts/report.py > REPORT.md            # слепой отчёт: только стороны A и B
-python3 scripts/report.py --unblind > REPORT.md  # + имена моделей из blind_key.json
+python3 scripts/run_snippets.py          # dry run: only shows what would be executed
+python3 scripts/run_snippets.py --run    # actual execution
 ```
 
-В отчёт попадают только задания со `status: "done"`: средние по критериям,
-количество побед и ничьих, разбивка по доменам и типам заданий, доля заданий, где
-даже у победителя `correctness` < 4, и сводка по запуску кода.
+> ⚠️ **Nobody has reviewed the code in the LLM answers.** It can delete files,
+> reach out to the network and do anything else. Run it deliberately, and
+> preferably in an isolated environment. Without `--run` nothing is executed.
 
-## Схема данных
+Each block runs in a temporary directory with a 10-second timeout:
+`python → python3`, `swift → swift`, `c → clang` plus running the binary,
+`java → java <File>.java`. If the tool is not on PATH, the code contains
+`import SwiftUI` / `import UIKit`, or the language is not recognised — the
+status is `skipped` with a reason. Statuses: `ok`, `compile_error`,
+`runtime_error`, `timeout`, `skipped`. The result goes to
+`data/snippet_results.json`.
 
-`data/evals.jsonl` — по одной JSON-записи на строку:
+### 7. Build the report
+
+```bash
+python3 scripts/report.py > REPORT.md            # blind report: sides A and B only
+python3 scripts/report.py --unblind > REPORT.md  # + model names from blind_key.json
+```
+
+Only tasks with `status: "done"` make it into the report: averages per
+criterion, the number of wins and ties, a breakdown by domain and task type,
+the share of tasks where even the winner scores `correctness` < 4, and a
+summary of the code runs.
+
+## Data schema
+
+`data/evals.jsonl` — one JSON record per line:
 
 ```json
 {
   "id": "ios-001",
   "domain": "ios",
   "task_type": "false_premise",
-  "prompt": "текст вопроса",
-  "answer_a": "ответ стороны A",
-  "answer_b": "ответ стороны B",
+  "prompt": "the question text",
+  "answer_a": "the answer from side A",
+  "answer_b": "the answer from side B",
   "status": "todo",
   "scores": {
     "a": {"correctness": null, "completeness": null, "clarity": null, "safety": null},
@@ -123,62 +131,64 @@ python3 scripts/report.py --unblind > REPORT.md  # + имена моделей �
 }
 ```
 
-| Поле | Значение |
+| Field | Meaning |
 |---|---|
-| `id` | `<domain>-NNN`, уникален |
+| `id` | `<domain>-NNN`, unique |
 | `domain` | `ios`, `networks`, `os_c`, `algorithms`, `git`, `history`, `law`, `finance`, `science`, `russian`, `everyday` |
 | `task_type` | `fact`, `code`, `debug`, `false_premise`, `explain`, `outdated` |
-| `status` | `todo` — не размечено, `done` — размечено полностью |
-| `scores.a` / `scores.b` | четыре критерия, целые 1–5 (или `null` до разметки) |
-| `verdict` | `A`, `B` или `tie` |
-| `rationale` | обоснование вердикта со ссылками на источники |
-| `sources` | список ссылок на первоисточники |
-| `reference` | эталонный ответ, написанный вручную |
+| `status` | `todo` — not annotated, `done` — fully annotated |
+| `scores.a` / `scores.b` | four criteria, integers 1–5 (or `null` before annotation) |
+| `verdict` | `A`, `B` or `tie` |
+| `rationale` | justification of the verdict with links to sources |
+| `sources` | list of links to primary sources |
+| `reference` | the reference answer, written by hand |
 
-`data/blind_key.json` — соответствие сторон и моделей:
+`data/blind_key.json` — the mapping between sides and models:
 
 ```json
 {"ios-001": {"a": "GigaChat", "b": "Алиса"}}
 ```
 
-Критерии и шкала 1–5 описаны в [GUIDELINES.md](GUIDELINES.md).
+The criteria and the 1–5 scale are described in [GUIDELINES.md](GUIDELINES.md)
+(in Russian).
 
-## Тесты
+## Tests
 
 ```bash
 python3 -m unittest discover -s tests
 ```
 
-Только стандартная библиотека Python 3, зависимостей нет. Тесты работают во
-временных каталогах и на синтетических фикстурах из `tests/fixtures/` и не
-изменяют `data/evals.jsonl` и `data/blind_key.json`.
+Python 3 standard library only, no dependencies. The tests work in temporary
+directories on synthetic fixtures from `tests/fixtures/` and do not modify
+`data/evals.jsonl` or `data/blind_key.json`.
 
-## Структура репозитория
+## Repository layout
 
 ```
 llm-eval-ru/
-├── README.md                  # этот файл
-├── GUIDELINES.md              # инструкция разметчика: критерии и шкала
+├── README.md                  this file
+├── GUIDELINES.md              annotator's manual: criteria and scale
 ├── data/
-│   ├── raw/_TEMPLATE.md       # шаблон для ручного ввода одного задания
-│   ├── raw/<domain>-NNN.md    # заполненные вручную задания
-│   ├── questions_bank.md      # 60 вопросов-кандидатов без ответов
-│   ├── evals.jsonl            # датасет разметки
-│   └── blind_key.json         # ключ «сторона → модель», не открывать до конца
-├── scripts/                   # new_task, ingest, validate, run_snippets, report
-└── tests/                     # unittest + синтетические фикстуры
+│   ├── raw/_TEMPLATE.md       template for entering one task by hand
+│   ├── raw/<domain>-NNN.md    tasks filled in by hand
+│   ├── questions_bank.md      60 candidate questions without answers
+│   ├── evals.jsonl            the annotation dataset
+│   └── blind_key.json         the "side → model" key, do not open until the end
+├── scripts/                   new_task, ingest, validate, run_snippets, report
+└── tests/                     unittest + synthetic fixtures
 ```
 
-## Результаты
+## Results
 
-<!-- Итоговая таблица переносится сюда из REPORT.md после того, как разметка
-     закончена и выполнена разблиндировка (scripts/report.py --unblind). -->
+<!-- The final table is moved here from REPORT.md once the annotation is
+     finished and unblinding has been done (scripts/report.py --unblind). -->
 
-Разметка в процессе. Итоговая таблица появится здесь по её завершении.
+Annotation is in progress. The final table will appear here when it is done.
 
-| Модель | Заданий | Побед | Ничьих | Точность | Полнота | Ясность | Безопасность | Средний балл |
+| Model | Tasks | Wins | Ties | Correctness | Completeness | Clarity | Safety | Mean score |
 |---|---|---|---|---|---|---|---|---|
-| Алиса | — | — | — | — | — | — | — | — |
+| Alice | — | — | — | — | — | — | — | — |
 | GigaChat | — | — | — | — | — | — | — | — |
 
-Наблюдения и разбор характерных ошибок будут добавлены сюда же.
+Observations and an analysis of the characteristic errors will be added here
+as well.
